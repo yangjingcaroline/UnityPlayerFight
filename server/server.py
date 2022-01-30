@@ -12,16 +12,12 @@ clients = {}
 
 
 class Client:
-    def __init__(self, conn, msg_str):
-        self.desc = self.get_desc(conn)
+    def __init__(self, msg_str):
         msg = msg_str.split(',')
+        self.desc = msg[0]
         self.x = msg[1]
         self.y = msg[2]
         self.z = msg[3]
-
-    @staticmethod
-    def get_desc(conn):
-        return f'{conn.getpeername()[0]}:{conn.getpeername()[1]}'
 
     def get_position(self):
         return f'{self.desc},{self.x},{self.y},{self.z}'
@@ -30,6 +26,7 @@ class Client:
         msg = msg_str.split(',')
         (x, y, z) = (msg[1], msg[2], msg[3])
         return f'{self.desc},{x},{y},{z}'
+
 
 def socket_service():
     try:
@@ -54,7 +51,7 @@ def handle_move(conn, msg):
 
 
 def handle_enter(conn, msg):
-    new_client = Client(conn, msg)
+    new_client = Client(msg)
     send('Enter|' + new_client.get_position())
     clients[conn] = new_client
 
@@ -67,7 +64,8 @@ def handle_list(conn):
 
 
 def handle_leave(conn):
-    msg = f"Leave|{Client.get_desc(conn)}"
+    client = clients[conn]
+    msg = f"Leave|{client.get_position()}"
     send(msg)
 
 
