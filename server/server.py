@@ -12,17 +12,24 @@ clients = {}
 
 
 class Client:
-    def __init__(self, msg_str):
+    def __init__(self, conn, msg_str):
+        self.desc = self.get_desc(conn)
         msg = msg_str.split(',')
-        desc = msg[0]
         self.x = msg[1]
         self.y = msg[2]
         self.z = msg[3]
-        self.desc = desc
+
+    @staticmethod
+    def get_desc(conn):
+        return f'{conn.getpeername()[0]}:{conn.getpeername()[1]}'
 
     def get_position(self):
         return f'{self.desc},{self.x},{self.y},{self.z}'
 
+    def move(self, msg_str):
+        msg = msg_str.split(',')
+        (x, y, z) = (msg[1], msg[2], msg[3])
+        return f'{self.desc},{x},{y},{z}'
 
 def socket_service():
     try:
@@ -41,15 +48,15 @@ def socket_service():
         threading.Thread(target=deal_data, args=(conn, addr)).start()
 
 
-def handle_move(msg):
-    client = Client(msg)
-    send(f'Move|{client.get_position()}')
+def handle_move(conn, msg):
+    client = clients[conn]
+    send(f'Move|{client.move(msg)}')
 
 
-def handle_enter(connection, msg):
-    new_client = Client(msg)
+def handle_enter(conn, msg):
+    new_client = Client(conn, msg)
     send('Enter|' + new_client.get_position())
-    clients[connection] = new_client
+    clients[conn] = new_client
 
 
 def handle_list(conn):
@@ -58,11 +65,10 @@ def handle_list(conn):
         msg += client.get_position() + ','
     conn_send(conn, msg)
 
+
 def handle_leave(conn):
-    msg = f"Leave|{conn.getpeername()[0]}:{conn.getpeername()[1]}"
+    msg = f"Leave|{Client.get_desc(conn)}"
     send(msg)
-
-
 
 
 def deal_data(conn, addr):
@@ -80,7 +86,7 @@ def deal_data(conn, addr):
             elif event == "List":
                 handle_list(conn)
             elif event == "Move":
-                handle_move(msg)
+                handle_move(conn, msg)
         else:
             if conn in clients.keys():
                 address_port = conn.getpeername()
