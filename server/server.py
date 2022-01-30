@@ -8,7 +8,20 @@ import threading
 import time
 import sys
 
-conns = []
+clients = {}
+
+
+class Client:
+    def __init__(self, msg_str):
+        msg = msg_str.split(',')
+        desc = msg[0]
+        self.x = msg[1]
+        self.y = msg[2]
+        self.z = msg[3]
+        self.desc = desc
+
+    def get_position(self):
+        return f'{self.desc},{self.x},{self.y},{self.z}'
 
 
 def socket_service():
@@ -24,8 +37,32 @@ def socket_service():
     print('Waiting connection...')
     while True:
         conn, addr = s.accept()
-        conns.append(conn)
+        # conns.append(conn)
         threading.Thread(target=deal_data, args=(conn, addr)).start()
+
+
+def handle_move(msg):
+    client = Client(msg)
+    send(f'Move|{client.get_position()}')
+
+
+def handle_enter(connection, msg):
+    new_client = Client(msg)
+    send('Enter|' + new_client.get_position())
+    clients[connection] = new_client
+
+
+def handle_list(conn):
+    msg = 'List|'
+    for conn, client in clients.items():
+        msg += client.get_position() + ','
+    conn_send(conn, msg)
+
+def handle_leave(conn):
+    msg = f"Leave|{conn.getpeername()[0]}:{conn.getpeername()[1]}"
+    send(msg)
+
+
 
 
 def deal_data(conn, addr):
@@ -33,19 +70,36 @@ def deal_data(conn, addr):
 
     while True:
         data = conn.recv(1024)
+        print(f'Recv message: {data.decode("utf-8")}')
         if len(data) != 0:
-            send(data)
+            message = data.decode('utf-8').split('|')
+            event = message[0]
+            msg = message[1]
+            if event == 'Enter':
+                handle_enter(conn, msg)
+            elif event == "List":
+                handle_list(conn)
+            elif event == "Move":
+                handle_move(msg)
         else:
-            if conn in conns:
-                print(f"客户端掉线：{conn}")
-                conns.remove(conn)
+            if conn in clients.keys():
+                address_port = conn.getpeername()
+                print(f"客户端掉线：{address_port[0]}:{address_port[1]}")
+                handle_leave(conn)
+                del (clients[conn])
+            else:
+                conn.close()
+
+
+def conn_send(conn, message):
+    print(message)
+    conn.send(message.encode('utf-8'))
 
 
 def send(message):
     print(message)
-    for conn in conns:
-        # conn.sendall('Hi, Welcome to the server!'.encode('utf-8'))
-        conn.send(message)
+    for conn in clients:
+        conn.send(message.encode('utf-8'))
 
 
 if __name__ == '__main__':
